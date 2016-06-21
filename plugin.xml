@@ -20,9 +20,18 @@
         <config-file parent="/*" target="AndroidManifest.xml">
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
             <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
+        </config-file>
+        <config-file parent="/manifest/application" target="AndroidManifest.xml">
+            <receiver android:name="com.google.android.gms.analytics.AnalyticsReceiver" android:enabled="true">
+                <intent-filter>
+                    <action android:name="com.google.android.gms.analytics.ANALYTICS_DISPATCH" />
+                </intent-filter>
+            </receiver>
+            <service android:name="com.google.android.gms.analytics.AnalyticsService" android:enabled="true" android:exported="false"/>
         </config-file>
         <source-file src="src/android/CDVTagManager.java" target-dir="src/com/jareddickson/cordova/tagmanager"/>
-        <source-file src="src/android/libGoogleAnalyticsServices.jar" target-dir="libs" />
+        <source-file src="src/android/ContainerHolderSingleton.java" target-dir="src/com/jareddickson/cordova/tagmanager"/>
     </platform>
     <platform name="ios">
         <config-file parent="/*" target="config.xml">

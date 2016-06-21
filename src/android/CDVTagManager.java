@@ -27,12 +27,15 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CordovaInterface;
 
-import com.google.analytics.tracking.android.GAServiceManager;
-import com.google.tagmanager.Container;
-import com.google.tagmanager.ContainerOpener;
-import com.google.tagmanager.ContainerOpener.OpenType;
-import com.google.tagmanager.DataLayer;
-import com.google.tagmanager.TagManager;
+import com.google.android.gms.analytics.GoogleAnalytics;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.tagmanager.TagManager;
+import com.google.android.gms.tagmanager.Container;
+import com.google.android.gms.tagmanager.Container.FunctionCallMacroCallback;
+import com.google.android.gms.tagmanager.Container.FunctionCallTagCallback;
+import com.google.android.gms.tagmanager.ContainerHolder;
+import com.google.android.gms.tagmanager.DataLayer;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,23 +66,34 @@ public class CDVTagManager extends CordovaPlugin {
         if (action.equals("initGTM")) {
             try {
                 // Set the dispatch interval
-                GAServiceManager.getInstance().setLocalDispatchPeriod(args.getInt(1));
+                GoogleAnalytics.getInstance(this.cordova.getActivity()).setLocalDispatchPeriod(args.getInt(1));
 
                 TagManager tagManager = TagManager.getInstance(this.cordova.getActivity().getApplicationContext());
-                ContainerOpener.openContainer(
-                        tagManager,                             // TagManager instance.
-                        args.getString(0),                      // Tag Manager Container ID.
-                        OpenType.PREFER_NON_DEFAULT,            // Prefer not to get the default container, but stale is OK.
-                        null,                                   // Time to wait for saved container to load (ms). Default is 2000ms.
-                        new ContainerOpener.Notifier() {        // Called when container loads.
+
+                String defaultBinaryContainerFileName = args.getString(0).toLowerCase().replace("-", "_");
+                int defaultBinaryContainerResourceId = this.cordova.getActivity().getResources().getIdentifier(defaultBinaryContainerFileName, "raw", this.cordova.getActivity().getApplicationContext().getPackageName());
+
+                PendingResult<ContainerHolder> pending = tagManager.loadContainerPreferNonDefault(args.getString(0), defaultBinaryContainerResourceId);
+
+                // The onResult method will be called as soon as one of the following happens:
+                //     1. a saved container is loaded
+                //     2. if there is no saved container, a network container is loaded
+                //     3. the 2-second timeout occurs
+                pending.setResultCallback(new ResultCallback<ContainerHolder>() {
+                    @Override
+                    public void onResult(ContainerHolder containerHolder) {
+                        ContainerHolderSingleton.setContainerHolder(containerHolder);
+
+                        containerHolder.setContainerAvailableListener(new ContainerHolder.ContainerAvailableListener() {
                             @Override
-                            public void containerAvailable(Container container) {
-                                // Handle assignment in callback to avoid blocking main thread.
-                                mContainer = container;
+                            public void onContainerAvailable(ContainerHolder containerHolder, String containerVersion) {
+                                mContainer = containerHolder.getContainer();
                                 inited = true;
                             }
-                        }
-                );
+                        });
+                    }
+                }, 2000, java.util.concurrent.TimeUnit.MILLISECONDS);
+
                 callback.success("initGTM - id = " + args.getString(0) + "; interval = " + args.getInt(1) + " seconds");
                 return true;
             } catch (final Exception e) {
@@ -115,7 +129,7 @@ public class CDVTagManager extends CordovaPlugin {
             if (inited) {
                 try {
                     DataLayer dataLayer = TagManager.getInstance(this.cordova.getActivity().getApplicationContext()).getDataLayer();
-                    dataLayer.push(objectMap(args.getJSONObject(0)));
+                    dataLayer.push(stringMap(args.getJSONObject(0)));
                     callback.success("pushEvent: " + dataLayer.toString());
                     return true;
                 } catch (final Exception e) {
@@ -140,7 +154,7 @@ public class CDVTagManager extends CordovaPlugin {
         } else if (action.equals("dispatch")) {
             if (inited) {
                 try {
-                    GAServiceManager.getInstance().dispatchLocalHits();
+                    GoogleAnalytics.getInstance(this.cordova.getActivity()).dispatchLocalHits();
                     callback.success("dispatch sent");
                     return true;
                 } catch (final Exception e) {
@@ -153,19 +167,20 @@ public class CDVTagManager extends CordovaPlugin {
         return false;
     }
 
-    private Map<Object, Object> objectMap(JSONObject o) throws JSONException {
+    private Map<String, Object> stringMap(JSONObject o) throws JSONException {
         if (o.length() == 0) {
-            return Collections.<Object, Object>emptyMap();
+            return Collections.<String, Object>emptyMap();
         }
-        Map<Object, Object> map = new HashMap<Object, Object>(o.length());
+        Map<String, Object> map = new HashMap<String, Object>(o.length());
         Iterator it = o.keys();
-        Object key;
+        String key;
         Object value;
         while (it.hasNext()) {
-            key = it.next();
+            key = it.next().toString();
             value = o.has(key.toString()) ? o.get(key.toString()): null;
             map.put(key, value);
         }
         return map;
-    }    
+    }
 }
+
