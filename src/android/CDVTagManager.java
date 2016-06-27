@@ -46,6 +46,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Iterator;
 
+import android.util.Log;
+
 /**
  * This class echoes a string called from JavaScript.
  */
@@ -69,9 +71,12 @@ public class CDVTagManager extends CordovaPlugin {
                 GoogleAnalytics.getInstance(this.cordova.getActivity()).setLocalDispatchPeriod(args.getInt(1));
 
                 TagManager tagManager = TagManager.getInstance(this.cordova.getActivity().getApplicationContext());
+                tagManager.setVerboseLoggingEnabled(false);
 
                 String defaultBinaryContainerFileName = args.getString(0).toLowerCase().replace("-", "_");
                 int defaultBinaryContainerResourceId = this.cordova.getActivity().getResources().getIdentifier(defaultBinaryContainerFileName, "raw", this.cordova.getActivity().getApplicationContext().getPackageName());
+
+                Log.d("TagManagerPlugin", "defaultBinaryContainerResourceId: " + defaultBinaryContainerResourceId);
 
                 PendingResult<ContainerHolder> pending = tagManager.loadContainerPreferNonDefault(args.getString(0), defaultBinaryContainerResourceId);
 
@@ -82,15 +87,26 @@ public class CDVTagManager extends CordovaPlugin {
                 pending.setResultCallback(new ResultCallback<ContainerHolder>() {
                     @Override
                     public void onResult(ContainerHolder containerHolder) {
+
+                        Log.d("TagManagerPlugin", "pending container result");
                         ContainerHolderSingleton.setContainerHolder(containerHolder);
 
                         containerHolder.setContainerAvailableListener(new ContainerHolder.ContainerAvailableListener() {
                             @Override
                             public void onContainerAvailable(ContainerHolder containerHolder, String containerVersion) {
+                                Log.d("TagManagerPlugin", "onContainerAvailable, container version: " + containerVersion);
+
                                 mContainer = containerHolder.getContainer();
                                 inited = true;
+
+                                ContainerHolderSingleton.getContainerHolder().refresh();
                             }
                         });
+
+                        if (containerHolder.getContainer() != null) {
+                            Log.d("TagManagerPlugin", "we have a container");
+                        }
+
                     }
                 }, 2000, java.util.concurrent.TimeUnit.MILLISECONDS);
 
@@ -116,7 +132,12 @@ public class CDVTagManager extends CordovaPlugin {
                         value = args.getInt(3);
                     } catch (Exception e) {
                     }
-                    dataLayer.push(DataLayer.mapOf("event", "interaction", "target", args.getString(0), "action", args.getString(1), "target-properties", args.getString(2), "value", value));
+                    String gtmVariable_target = (args.getString(0) != null ? args.getString(0) : "");
+                    String gtmVariable_action = (args.getString(1) != null ? args.getString(1) : "");
+                    String gtmVariable_targetProperties = (args.getString(2) != null ? args.getString(2) : "");
+
+                    dataLayer.push(DataLayer.mapOf("event", "interaction", "target", gtmVariable_target, "action", gtmVariable_action, "target-properties", gtmVariable_targetProperties, "value", value));
+
                     callback.success("trackEvent - category = " + args.getString(0) + "; action = " + args.getString(1) + "; label = " + args.getString(2) + "; value = " + value);
                     return true;
                 } catch (final Exception e) {
